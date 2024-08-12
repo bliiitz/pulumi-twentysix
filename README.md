@@ -1,6 +1,33 @@
-# Pulumi Native Provider Boilerplate
+# Pulumi Native TwentySix Cloud Provider
 
 This repository is a boilerplate showing how to create and locally test a native Pulumi provider.
+
+
+Migration roadmap:
+- implement basic resource on pulumi (volume / function / instance)
+- implement base image builer with k3s master api cloud init 
+- implement base image builer with k3s node cloud init 
+- implement the TKS (Twentysix Kubernetes Service) cluster deployer on pulumi
+   - setup a hashicorp vault as kubernetes PKI to manage TLS everywhere
+      - Optional: auto unseal is more confortable
+         - implement and deploy oss kms (to implement: fork this: https://github.com/nsmithuk/local-kms for poc) that replicate AWK KMS with key 
+            provided by confidential vm secret
+         - auto unseal with kms
+   - setup vault signer plugin on vault
+   - push the private key of used on twentysix used in the vault for auto scaler
+   - implement and deploy an twentysix cluster auto scaler (using the private key in vault to order new nodes)
+   - Deploy OpenEBS to use node storage to provide Persistent volume for pods
+
+
+- implement and deploy TIS Operator (Twentysix Indexer Service) / -> replacement of our elasticsearch
+   - implemented with rethink db and golang indexation pod
+      - grpc service: real time API for logs distributions and query evm logs indexed
+         - or maybe reproduce the json api of a node to query logs with wss to easily convert or indexer codebase
+      - rethink db: db adapted to have database change stream
+      - deploy indexation process with CRDs: implement a light evm log indexer watching a specific contract or a specific log topic
+         - rewrite strateg indexer in golang to optimize resource consumed
+
+- implement indexer / elasticsearch changes & deploy our backend on the TKS cluster
 
 ## Authoring a Pulumi Native Provider
 
