@@ -17,7 +17,7 @@ package main
 import (
 	p "github.com/pulumi/pulumi-go-provider"
 
-	twentysix "github.com/bliiitz/pulumi-twentysix-provider/provider"
+	twentysix "github.com/bliiitz/pulumi-twentysix/provider"
 )
 
 // Serve the provider against Pulumi's Provider protocol.

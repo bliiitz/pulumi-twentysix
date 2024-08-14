@@ -1,4 +1,4 @@
-module github.com/pulumi/pulumi-xyz/sdk
+module github.com/bliiitz/pulumi-twentysix-provider/sdk
 
 go 1.21
 

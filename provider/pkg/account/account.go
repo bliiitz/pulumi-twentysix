@@ -1,4 +1,4 @@
-package instance
+package account
 
 import (
 	"crypto/ecdsa"
@@ -28,9 +28,9 @@ type TwentySixAccountArgs struct {
 	// Fields projected into Pulumi must be public and hava a `pulumi:"..."` tag.
 	// The pulumi tag doesn't need to match the field name, but it's generally a
 	// good idea.
-	privateKey     []byte `pulumi:"privateKey,optional"`
-	mnemonic       string `pulumi:"mnemonic,optional"`
-	derivationPath string `pulumi:"derivationPath,optional"`
+	PrivateKey     []byte `pulumi:"privateKey,optional"`
+	Mnemonic       string `pulumi:"mnemonic,optional"`
+	DerivationPath string `pulumi:"derivationPath,optional"`
 }
 
 // Each resource has a state, describing the fields that exist on the created resource.
@@ -38,8 +38,8 @@ type TwentySixAccountState struct {
 	// It is generally a good idea to embed args in outputs, but it isn't strictly necessary.
 	TwentySixAccountArgs
 
-	address   string `pulumi:"address"`
-	publicKey []byte `pulumi:"publicKey"`
+	Address   string `pulumi:"address"`
+	PublicKey []byte `pulumi:"publicKey"`
 }
 
 // All resources must implement Create at a minimum.
@@ -49,8 +49,8 @@ func (instance TwentySixAccount) Create(ctx p.Context, name string, input Twenty
 		return name, state, nil
 	}
 
-	if len(state.privateKey) > 0 {
-		privateKey := crypto.ToECDSAUnsafe(state.privateKey)
+	if len(state.PrivateKey) > 0 {
+		privateKey := crypto.ToECDSAUnsafe(state.PrivateKey)
 		publicKey := privateKey.Public()
 
 		publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
@@ -58,23 +58,23 @@ func (instance TwentySixAccount) Create(ctx p.Context, name string, input Twenty
 			return "", TwentySixAccountState{}, errors.New("error casting public key to ECDSA")
 		}
 
-		state.publicKey = crypto.FromECDSAPub(publicKeyECDSA)
-		state.address = crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+		state.PublicKey = crypto.FromECDSAPub(publicKeyECDSA)
+		state.Address = crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
 
 		return name, state, nil
 	}
 
-	if len(state.mnemonic) > 0 {
-		wallet, err := hdwallet.NewFromMnemonic(state.mnemonic)
+	if len(state.Mnemonic) > 0 {
+		wallet, err := hdwallet.NewFromMnemonic(state.Mnemonic)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		if len(state.derivationPath) == 0 {
-			state.derivationPath = "m/44'/60'/0'/0/0"
+		if len(state.DerivationPath) == 0 {
+			state.DerivationPath = "m/44'/60'/0'/0/0"
 		}
 
-		path := hdwallet.MustParseDerivationPath(state.derivationPath)
+		path := hdwallet.MustParseDerivationPath(state.DerivationPath)
 		account, err := wallet.Derive(path, true)
 		if err != nil {
 			return "", TwentySixAccountState{}, err
@@ -95,9 +95,9 @@ func (instance TwentySixAccount) Create(ctx p.Context, name string, input Twenty
 			return "", TwentySixAccountState{}, err
 		}
 
-		state.privateKey = privateKey
-		state.publicKey = publicKey
-		state.address = address
+		state.PrivateKey = privateKey
+		state.PublicKey = publicKey
+		state.Address = address
 
 		return name, state, nil
 	}

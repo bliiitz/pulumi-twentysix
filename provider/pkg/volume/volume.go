@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	account "github.com/bliiitz/pulumi-twentysix/provider/pkg/account"
@@ -36,9 +35,10 @@ type TwentySixVolumeArgs struct {
 	// The pulumi tag doesn't need to match the field name, but it's generally a
 	// good idea.
 
-	account    account.TwentySixAccount `pulumi:"account"`
-	folderPath string                   `pulumi:"folderPath"`
-	size       int64                    `pulumi:"size,optional"`
+	account    account.TwentySixAccountState `pulumi:"account"`
+	channel    string                        `pulumi:"channel"`
+	folderPath string                        `pulumi:"folderPath"`
+	size       int64                         `pulumi:"size,optional"`
 }
 
 // Each resource has a state, describing the fields that exist on the created resource.
@@ -47,11 +47,12 @@ type TwentySixVolumeState struct {
 	TwentySixVolumeArgs
 
 	// Here we define a required output called result.
-	Result string `pulumi:"result"`
+	IpfsHash    string `pulumi:"ipfsHash"`
+	MessageHash string `pulumi:"messageHash"`
 }
 
 // All resources must implement Create at a minimum.
-func (instance TwentySixVolume) Create(ctx p.Context, name string, input TwentySixVolumeArgs, preview bool) (string, TwentySixVolumeState, error) {
+func (volume TwentySixVolume) Create(ctx p.Context, name string, input TwentySixVolumeArgs, preview bool) (string, TwentySixVolumeState, error) {
 	state := TwentySixVolumeState{TwentySixVolumeArgs: input}
 	if preview {
 		return name, state, nil
@@ -61,35 +62,29 @@ func (instance TwentySixVolume) Create(ctx p.Context, name string, input TwentyS
 		log.Fatal("must have a valid path for diskImg")
 	}
 
-	filesystemPath := "/tmp/pulumi-squashfs-" + fmt.Sprint(time.Now().Unix())
+	filesystemPath := "/tmp/pulumi-squashfs-" + fmt.Sprint(time.Now().Unix()) + ".squashfs"
 
-	mydisk, err := diskfs.Create(filesystemPath, state.size, diskfs.Raw, diskfs.SectorSizeDefault)
+	err := CreateVolumeFromFolder(state.folderPath, filesystemPath)
 	if err != nil {
 		return "", TwentySixVolumeState{}, err
 	}
 
-	fspec := disk.FilesystemSpec{Partition: 0, FSType: filesystem.TypeSquashfs, VolumeLabel: "label"}
-
-	fs, err := mydisk.CreateFilesystem(fspec)
+	size, err := FolderSize(filesystemPath)
 	if err != nil {
 		return "", TwentySixVolumeState{}, err
 	}
 
-	rw, err := fs.OpenFile("demo.txt", os.O_CREATE|os.O_RDWR)
-	content := []byte("demo")
-	_, err = rw.Write(content)
+	state.size = size
 
-	sqs, ok := fs.(*squashfs.FileSystem)
-	if !ok {
-		if err != nil {
-			return "", TwentySixVolumeState{}, fmt.Errorf("not a squashfs filesystem")
-		}
-	}
-
-	err = sqs.Finalize(squashfs.FinalizeOptions{})
+	//store volume on aleph
+	client := account.NewTwentySixClient(input.account, state.channel)
+	response, ipfsHash, err := client.StoreFile(filesystemPath)
 	if err != nil {
 		return "", TwentySixVolumeState{}, err
 	}
+
+	state.IpfsHash = ipfsHash
+	state.MessageHash = response.Message.ItemHash
 
 	return name, state, nil
 }
@@ -102,109 +97,110 @@ func folderExists(path string) bool {
 	}
 }
 
-func CopyDirectory(scrDir string, fs filesystem.FileSystem) error {
-	entries, err := os.ReadDir(scrDir)
+func FolderSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
+}
+
+func CreateVolumeFromFolder(srcFolder string, outputFileName string) error {
+	// We need to know the size of the folder before we can create a disk image
+	// TODO: Are we able to create a disk image with a dynamic size?
+	folderSize, err := FolderSize(srcFolder)
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		sourcePath := filepath.Join(scrDir, entry.Name())
-		destPath := filepath.Join(dest, entry.Name())
 
-		fileInfo, err := os.Stat(sourcePath)
+	// TODO: Explain why we need to set the logical block size and which values should be used
+	var LogicalBlocksize diskfs.SectorSize = 2048
+
+	// Create the disk image
+	// TODO: Explain why we need to use Raw here
+	mydisk, err := diskfs.Create(outputFileName, folderSize, diskfs.Raw, LogicalBlocksize)
+	if err != nil {
+		return err
+	}
+
+	// Create the ISO filesystem on the disk image
+	fspec := disk.FilesystemSpec{
+		Partition:   0,
+		FSType:      filesystem.TypeSquashfs,
+		VolumeLabel: "label",
+	}
+
+	fs, err := mydisk.CreateFilesystem(fspec)
+	if err != nil {
+		return err
+	}
+
+	// Walk the source folder to copy all files and folders to the ISO filesystem
+	err = filepath.Walk(srcFolder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		stat, ok := fileInfo.Sys().(*syscall.Stat_t)
-		if !ok {
-			return fmt.Errorf("failed to get raw syscall.Stat_t data for '%s'", sourcePath)
-		}
-
-		switch fileInfo.Mode() & os.ModeType {
-		case os.ModeDir:
-			if err := CreateIfNotExists(destPath, 0755); err != nil {
-				return err
-			}
-			if err := CopyDirectory(sourcePath, destPath); err != nil {
-				return err
-			}
-		case os.ModeSymlink:
-			if err := CopySymLink(sourcePath, destPath); err != nil {
-				return err
-			}
-		default:
-			if err := Copy(sourcePath, destPath); err != nil {
-				return err
-			}
-		}
-
-		if err := os.Lchown(destPath, int(stat.Uid), int(stat.Gid)); err != nil {
-			return err
-		}
-
-		fInfo, err := entry.Info()
+		relPath, err := filepath.Rel(srcFolder, path)
 		if err != nil {
 			return err
 		}
 
-		isSymlink := fInfo.Mode()&os.ModeSymlink != 0
-		if !isSymlink {
-			if err := os.Chmod(destPath, fInfo.Mode()); err != nil {
+		// If the current path is a folder, create the folder in the ISO filesystem
+		if info.IsDir() {
+			// Create the directory in the ISO file
+			err = fs.Mkdir(relPath)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+
+		// If the current path is a file, copy the file to the ISO filesystem
+		if !info.IsDir() {
+			// Open the file in the ISO file for writing
+			rw, err := fs.OpenFile(relPath, os.O_CREATE|os.O_RDWR)
+			if err != nil {
+				return err
+			}
+
+			// Open the source file for reading
+			in, errorOpeningFile := os.Open(path)
+			if errorOpeningFile != nil {
+				return errorOpeningFile
+			}
+			defer in.Close()
+
+			// Copy the contents of the source file to the ISO file
+			_, err = io.Copy(rw, in)
+			if err != nil {
 				return err
 			}
 		}
-	}
-	return nil
-}
 
-func Copy(srcFile, dstFile string) error {
-	out, err := os.Create(dstFile)
-	if err != nil {
-		return err
-	}
-
-	defer out.Close()
-
-	in, err := os.Open(srcFile)
-	if err != nil {
-		return err
-	}
-
-	defer in.Close()
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func Exists(filePath string) bool {
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return false
-	}
-
-	return true
-}
-
-func CreateIfNotExists(dir string, perm os.FileMode) error {
-	if Exists(dir) {
 		return nil
-	}
+	})
 
-	if err := os.MkdirAll(dir, perm); err != nil {
-		return fmt.Errorf("failed to create directory: '%s', error: '%s'", dir, err.Error())
-	}
-
-	return nil
-}
-
-func CopySymLink(source, dest string) error {
-	link, err := os.Readlink(source)
 	if err != nil {
 		return err
 	}
-	return os.Symlink(link, dest)
+
+	iso, ok := fs.(*squashfs.FileSystem)
+	if !ok {
+		return fmt.Errorf("not an squashfs filesystem")
+	}
+
+	err = iso.Finalize(squashfs.FinalizeOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
