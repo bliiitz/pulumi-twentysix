@@ -19,7 +19,7 @@ import (
 	"github.com/pulumi/pulumi-go-provider/infer"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/tokens"
 
-	volume "github.com/bliiitz/pulumi-twentysix/provider/pkg/volume"
+	basics "github.com/bliiitz/pulumi-twentysix/provider/pkg/basics"
 )
 
 // Version is initialized by the Go linker to contain the semver of this build.
@@ -32,7 +32,8 @@ func Provider() p.Provider {
 	// In this case, a single custom resource.
 	return infer.Provider(infer.Options{
 		Resources: []infer.InferredResource{
-			infer.Resource[volume.TwentySixVolume, volume.TwentySixVolumeArgs, volume.TwentySixVolumeState](),
+			infer.Resource[basics.TwentySixAccount, basics.TwentySixAccountArgs, basics.TwentySixAccountState](),
+			infer.Resource[basics.TwentySixVolume, basics.TwentySixVolumeArgs, basics.TwentySixVolumeState](),
 		},
 		ModuleMap: map[tokens.ModuleName]tokens.ModuleName{
 			"provider": "index",

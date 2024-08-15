@@ -1,6 +1,8 @@
 module github.com/bliiitz/pulumi-twentysix/provider
 
-go 1.21
+go 1.22
+
+toolchain go1.22.5
 
 require (
 	github.com/pulumi/pulumi-go-provider v0.11.1
@@ -41,6 +43,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/gosimple/hashdir v1.0.2 // indirect
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect

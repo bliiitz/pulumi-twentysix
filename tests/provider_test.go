@@ -15,6 +15,8 @@
 package tests
 
 import (
+	"log"
+	"os"
 	"testing"
 
 	"github.com/blang/semver"
@@ -25,32 +27,58 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	xyz "github.com/pulumi/pulumi-xyz/provider"
+	twentysix "github.com/bliiitz/pulumi-twentysix/provider"
 )
 
-func TestRandomCreate(t *testing.T) {
+func TestPublishVolume(t *testing.T) {
 	prov := provider()
 
-	response, err := prov.Create(p.CreateRequest{
-		Urn: urn("Random"),
+	path, err := os.Getwd()
+	if err != nil {
+		log.Println(err)
+	}
+
+	account, err := prov.Create(p.CreateRequest{
+		Urn: urn("twentysix:basics:TwentySixAccount"),
 		Properties: resource.PropertyMap{
-			"length": resource.NewNumberProperty(12),
+			"privateKey": resource.NewStringProperty(""),
 		},
 		Preview: false,
 	})
 
 	require.NoError(t, err)
-	result := response.Properties["result"].StringValue()
-	assert.Len(t, result, 12)
+
+	volume, err := prov.Create(p.CreateRequest{
+		Urn: urn("twentysix:basics:TwentySixVolume"),
+		Properties: resource.PropertyMap{
+			"account":    resource.NewObjectProperty(account.Properties.Copy()),
+			"channel":    resource.NewStringProperty("ALEPH-CLOUDSOLUTIONS"),
+			"folderPath": resource.NewStringProperty(path + "/../sdk"),
+		},
+		Preview: false,
+	})
+
+	require.NoError(t, err)
+	fileHash := volume.Properties["fileHash"].StringValue()
+	messageHash := volume.Properties["messageHash"].StringValue()
+	assert.Len(t, fileHash, 64)
+	assert.Len(t, messageHash, 64)
+
+	err = prov.Delete(p.DeleteRequest{
+		Urn:        urn("twentysix:basics:TwentySixVolume"),
+		Properties: volume.Properties.Copy(),
+	})
+
+	require.NoError(t, err)
 }
 
 // urn is a helper function to build an urn for running integration tests.
 func urn(typ string) resource.URN {
 	return resource.NewURN("stack", "proj", "",
-		tokens.Type("test:index:"+typ), "name")
+		tokens.Type(typ), "name")
 }
 
 // Create a test server.
 func provider() integration.Server {
-	return integration.NewServer(xyz.Name, semver.MustParse("1.0.0"), xyz.Provider())
+	return integration.NewServer(twentysix.Name, semver.MustParse("1.0.0"), twentysix.Provider())
 }

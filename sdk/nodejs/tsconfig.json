@@ -13,9 +13,12 @@
         "strict": true
     },
     "files": [
+        "account/index.ts",
+        "account/twentySixAccount.ts",
         "index.ts",
         "provider.ts",
-        "random.ts",
-        "utilities.ts"
+        "utilities.ts",
+        "volume/index.ts",
+        "volume/twentySixVolume.ts"
     ]
 }

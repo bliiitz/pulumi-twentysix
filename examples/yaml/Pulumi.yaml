@@ -1,13 +1,13 @@
-name: provider-xyz-native
+name: provider-twentysix-native
 runtime: yaml
 plugins:
   providers:
-    - name: xyz
+    - name: twentysix
       path: ../../bin
 
 resources:
   myRandomResource:
-    type: xyz:Random
+    type: twentysix:Random
     properties:
       length: 24
 
