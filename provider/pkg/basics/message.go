@@ -30,6 +30,7 @@ const (
 	StorageMessageItem MessageItemType = "storage"
 	IpfsMessageItem    MessageItemType = "ipfs"
 
+	SucceedMessageStatus   MessageStatus = "success"
 	PendingMessageStatus   MessageStatus = "pending"
 	ProcessedMessageStatus MessageStatus = "processed"
 	RejectedMessageStatus  MessageStatus = "rejected"
@@ -95,18 +96,35 @@ type ForgetMessageContent struct {
 	Hashes  []string `json:"hashes"`
 }
 
-type InstanceMessageContent struct {
-	Rootfs         RootFsVolume        `json:"rootfs"`
+type ProgramMessageContent struct {
+	Time           float64             `json:"time"`
+	Address        string              `json:"address"`
 	AllowAmend     bool                `json:"allow_amend"`
 	Metadata       map[string]string   `json:"metadata"`
 	AuthorizedKeys []string            `json:"authorized_keys"`
-	Variables      map[string]string   `json:"variables"`
+	Variables      map[string]string   `json:"variables,omitempty"`
 	Environment    FunctionEnvironment `json:"environment"`
 	Resources      MachineResources    `json:"resources"`
 	Payment        Payment             `json:"payment"`
-	Requirements   HostRequirements    `json:"requirements"`
-	Volumes        []interface{}       `json:"volumes"`
-	Replaces       string              `json:"replaces"`
+	// Requirements   HostRequirements    `json:"requirements,omitempty"`
+	Volumes  []interface{} `json:"volumes"`
+	Replaces string        `json:"replaces,omitempty"`
+}
+
+type InstanceMessageContent struct {
+	Rootfs         RootFsVolume        `json:"rootfs"`
+	Time           float64             `json:"time"`
+	Address        string              `json:"address"`
+	AllowAmend     bool                `json:"allow_amend"`
+	Metadata       map[string]string   `json:"metadata"`
+	AuthorizedKeys []string            `json:"authorized_keys"`
+	Variables      map[string]string   `json:"variables,omitempty"`
+	Environment    FunctionEnvironment `json:"environment"`
+	Resources      MachineResources    `json:"resources"`
+	Payment        Payment             `json:"payment"`
+	// Requirements   HostRequirements    `json:"requirements,omitempty"`
+	Volumes  []interface{} `json:"volumes"`
+	Replaces string        `json:"replaces,omitempty"`
 }
 
 type FunctionEnvironment struct {
@@ -123,18 +141,18 @@ type MachineResources struct {
 }
 
 type NodeRequirements struct {
-	Owner        string `json:"owner"`
-	AddressRegex string `json:"address_regex"`
+	Owner        string `json:"owner,omitempty"`
+	AddressRegex string `json:"address_regex,omitempty"`
 }
 
 type CpuProperties struct {
-	Architecture CpuArchitecture `json:"architecture"`
-	Vendor       CpuVendor       `json:"vendor"`
+	Architecture CpuArchitecture `json:"architecture,omitempty"`
+	Vendor       CpuVendor       `json:"vendor,omitempty"`
 }
 
 type HostRequirements struct {
-	Cpu  CpuProperties    `json:"cpu"`
-	Node NodeRequirements `json:"node"`
+	Cpu  CpuProperties    `json:"cpu,omitempty"`
+	Node NodeRequirements `json:"node,omitempty"`
 }
 
 type ImmutableVolume struct {
@@ -162,8 +180,8 @@ type PersistentVolume struct {
 
 type Payment struct {
 	Chain    MessageChain `json:"chain"`
-	Receiver string       `json:"receiver"`
-	Type     PaymentType  `json:"Type"`
+	Receiver string       `json:"receiver,omitempty"`
+	Type     PaymentType  `json:"type"`
 }
 
 type RootFsVolume struct {
@@ -212,12 +230,30 @@ type BroadcastResponse struct {
 	Response []byte        `json:"response"`
 }
 
-type ForgetMessageResponse struct {
+type MessageResponse struct {
 	PublicationStatus struct {
 		Status MessageStatus `json:"status"`
 		Failed []string      `json:"failed"`
 	} `json:"publication_status"`
 	Status MessageStatus `json:"message_status"`
+}
+
+type SchedulerAllocation struct {
+	VmHash string `json:"vm_hash"`
+	VmType string `json:"vm_type"`
+	VmIPV6 string `json:"vm_ipv6"`
+
+	Period struct {
+		Start    string  `json:"start_timestamp"`
+		Duration float64 `json:"duration_seconds"`
+	} `json:"period"`
+
+	Node struct {
+		NodeId      string `json:"node_id"`
+		Url         string `json:"url"`
+		IPV6        string `json:"ipv6"`
+		IPV6Support bool   `json:"supports_ipv6"`
+	} `json:"node"`
 }
 
 func (msg Message) getVerificationPayload() []byte {

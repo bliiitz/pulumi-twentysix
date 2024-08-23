@@ -16,7 +16,7 @@ Migration roadmap:
    - setup vault signer plugin on vault
    - push the private key of used on twentysix used in the vault for auto scaler
    - implement and deploy an twentysix cluster auto scaler (using the private key in vault to order new nodes)
-   - Deploy OpenEBS to use node storage to provide Persistent volume for pods
+   - Deploy OpenEBS/longhorn to use node storage to provide Persistent volume for pods
 
 
 - implement and deploy TIS Operator (Twentysix Indexer Service) / -> replacement of our elasticsearch

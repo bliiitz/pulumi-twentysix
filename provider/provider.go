@@ -34,6 +34,7 @@ func Provider() p.Provider {
 		Resources: []infer.InferredResource{
 			infer.Resource[basics.TwentySixAccount, basics.TwentySixAccountArgs, basics.TwentySixAccountState](),
 			infer.Resource[basics.TwentySixVolume, basics.TwentySixVolumeArgs, basics.TwentySixVolumeState](),
+			infer.Resource[basics.TwentySixInstance, basics.TwentySixInstanceArgs, basics.TwentySixInstanceState](),
 		},
 		ModuleMap: map[tokens.ModuleName]tokens.ModuleName{
 			"provider": "index",

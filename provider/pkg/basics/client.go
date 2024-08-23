@@ -241,14 +241,14 @@ func (client *TwentySixClient) StoreFile(filePath string) (Message, string, erro
 		return Message{}, "", err
 	}
 
-	log.Println(string(resultBody))
-
 	var storeFileResponse StoreIPFSFileResponse
 	if err := json.Unmarshal(resultBody, &storeFileResponse); err != nil {
 		return Message{}, "", err
 	}
 
 	defer response.Body.Close()
+
+	time.Sleep(5 * time.Second)
 
 	createdMessage, err := client.GetVolumeByItemHash(storeFileResponse.Hash)
 	if err != nil {
@@ -258,9 +258,250 @@ func (client *TwentySixClient) StoreFile(filePath string) (Message, string, erro
 	return createdMessage, storeFileResponse.Hash, nil
 }
 
-func (client *TwentySixClient) CreateInstance(filePath string) (string, error) {
+func (client *TwentySixClient) CreateInstance(instance TwentySixInstanceArgs) (Message, MessageResponse, error) {
+	now := float64(time.Now().UnixMilli()) / 1000
 
-	return "", nil
+	instanceMessage := client.instanceArgsToMessage(instance)
+	instanceMessage.Time = now
+	instanceMessage.Address = client.account.Address
+
+	jsonItem, err := json.Marshal(instanceMessage)
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	contentHash := sha256.Sum256(jsonItem)
+
+	message := Message{
+		Chain:       EthereumChain,
+		Sender:      client.account.Address,
+		Channel:     client.channel,
+		Time:        now,
+		Type:        InstanceMessageType,
+		ItemType:    InlineMessageItem,
+		ItemHash:    hex.EncodeToString(contentHash[:]),
+		ItemContent: string(jsonItem),
+	}
+
+	message.SignMessage(client.account.PrivateKey)
+
+	req := BroadcastRequest{
+		Sync:    false,
+		Message: message,
+	}
+
+	messageJSON, err := json.Marshal(req)
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	log.Println("_________________________ instance request _________________________")
+	log.Println(string(messageJSON))
+
+	storeEndpoint := AlephApiUrl + "/api/v0/messages"
+	request, err := http.NewRequest("POST", storeEndpoint, bytes.NewBuffer(messageJSON))
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	request.Header.Add("Content-Type", "application/json")
+	request.Header.Add("Accept", "application/json")
+
+	response, err := client.http.Do(request)
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	resultBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+	log.Println("_________________________ instance response _________________________")
+	log.Println(string(resultBody))
+
+	var createInstanceResponse MessageResponse
+	if err := json.Unmarshal(resultBody, &createInstanceResponse); err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	return message, createInstanceResponse, nil
+}
+
+func (client *TwentySixClient) CreateFunction(function TwentySixFunctionArgs) (Message, MessageResponse, error) {
+	now := float64(time.Now().UnixMilli()) / 1000
+
+	functionMessage := client.functionArgsToMessage(function)
+	functionMessage.Time = now
+	functionMessage.Address = client.account.Address
+
+	jsonItem, err := json.Marshal(functionMessage)
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	contentHash := sha256.Sum256(jsonItem)
+
+	message := Message{
+		Chain:       EthereumChain,
+		Sender:      client.account.Address,
+		Channel:     client.channel,
+		Time:        now,
+		Type:        ProgramMessageType,
+		ItemType:    InlineMessageItem,
+		ItemHash:    hex.EncodeToString(contentHash[:]),
+		ItemContent: string(jsonItem),
+	}
+
+	message.SignMessage(client.account.PrivateKey)
+
+	req := BroadcastRequest{
+		Sync:    false,
+		Message: message,
+	}
+
+	messageJSON, err := json.Marshal(req)
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	log.Println("_________________________ function request _________________________")
+	log.Println(string(messageJSON))
+
+	storeEndpoint := AlephApiUrl + "/api/v0/messages"
+	request, err := http.NewRequest("POST", storeEndpoint, bytes.NewBuffer(messageJSON))
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	request.Header.Add("Content-Type", "application/json")
+	request.Header.Add("Accept", "application/json")
+
+	response, err := client.http.Do(request)
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	resultBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+	log.Println("_________________________ function response _________________________")
+	log.Println(string(resultBody))
+
+	var createfunctionResponse MessageResponse
+	if err := json.Unmarshal(resultBody, &createfunctionResponse); err != nil {
+		return Message{}, MessageResponse{}, err
+	}
+
+	return message, createfunctionResponse, nil
+}
+
+func (client *TwentySixClient) instanceArgsToMessage(instance TwentySixInstanceArgs) InstanceMessageContent {
+	instanceMessage := InstanceMessageContent{
+		Rootfs: RootFsVolume{
+			Parent: ParentVolume{
+				Ref:       instance.Rootfs.Parent.Ref,
+				UseLatest: instance.Rootfs.Parent.UseLatest,
+			},
+			Persistence: instance.Rootfs.Persistence,
+			SizeMib:     instance.Rootfs.SizeMib,
+		},
+		AllowAmend:     instance.AllowAmend,
+		Metadata:       instance.Metadata,
+		AuthorizedKeys: instance.AuthorizedKeys,
+		Variables:      instance.Variables,
+		Environment: FunctionEnvironment{
+			Reproducible: instance.Environment.Reproducible,
+			Internet:     instance.Environment.Internet,
+			AlephApi:     instance.Environment.AlephApi,
+			SharedCache:  instance.Environment.SharedCache,
+		},
+		Resources: MachineResources{
+			Vcpus:   instance.Resources.Vcpus,
+			Memory:  instance.Resources.Memory,
+			Seconds: instance.Resources.Seconds,
+		},
+		Payment: Payment{
+			Chain:    instance.Payment.Chain,
+			Receiver: instance.Payment.Receiver,
+			Type:     instance.Payment.Type,
+		},
+		// Requirements: HostRequirements{
+		// 	Cpu:  instance.Requirements.Cpu,
+		// 	Node: instance.Requirements.Node,
+		// },
+		Volumes:  instance.Volumes,
+		Replaces: instance.Replaces,
+	}
+
+	return instanceMessage
+}
+
+func (client *TwentySixClient) functionArgsToMessage(function TwentySixFunctionArgs) ProgramMessageContent {
+	functionMessage := ProgramMessageContent{
+		AllowAmend:     function.AllowAmend,
+		Metadata:       function.Metadata,
+		AuthorizedKeys: function.AuthorizedKeys,
+		Variables:      function.Variables,
+		Environment: FunctionEnvironment{
+			Reproducible: function.Environment.Reproducible,
+			Internet:     function.Environment.Internet,
+			AlephApi:     function.Environment.AlephApi,
+			SharedCache:  function.Environment.SharedCache,
+		},
+		Resources: MachineResources{
+			Vcpus:   function.Resources.Vcpus,
+			Memory:  function.Resources.Memory,
+			Seconds: function.Resources.Seconds,
+		},
+		Payment: Payment{
+			Chain:    function.Payment.Chain,
+			Receiver: function.Payment.Receiver,
+			Type:     function.Payment.Type,
+		},
+		// Requirements: HostRequirements{
+		// 	Cpu:  instance.Requirements.Cpu,
+		// 	Node: instance.Requirements.Node,
+		// },
+		Volumes:  function.Volumes,
+		Replaces: function.Replaces,
+	}
+
+	return functionMessage
+}
+
+func (client *TwentySixClient) GetInstanceState(hash string) (SchedulerAllocation, error) {
+	body := &bytes.Buffer{}
+	endpoint := "https://scheduler.api.aleph.sh/api/v0/allocation/" + hash
+
+	var res SchedulerAllocation
+
+	request, err := http.NewRequest("GET", endpoint, body)
+	if err != nil {
+		return res, err
+	}
+
+	request.Header.Add("Accept", "application/json")
+
+	response, err := client.http.Do(request)
+	if err != nil {
+		return res, err
+	}
+
+	log.Println("status code: " + fmt.Sprint(response.StatusCode))
+
+	resultBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return res, err
+	}
+
+	log.Println("body: " + string(resultBody))
+
+	if err := json.Unmarshal(resultBody, &res); err != nil {
+		return res, err
+	}
+
+	return res, nil
 }
 
 func (client *TwentySixClient) GetMessages(size uint64, page uint64, hashes []string, addresses []string, channels []string, msgTypes []MessageType) ([]Message, uint64, error) {
@@ -305,8 +546,6 @@ func (client *TwentySixClient) GetMessages(size uint64, page uint64, hashes []st
 	if err != nil {
 		return messages, 0, err
 	}
-
-	log.Println(string(resultBody))
 
 	var getMessageResponse GetMessageResponse
 	if err := json.Unmarshal(resultBody, &getMessageResponse); err != nil {
@@ -360,7 +599,7 @@ func (client *TwentySixClient) GetVolumeByItemHash(hash string) (Message, error)
 	return Message{}, errors.New("volume not found")
 }
 
-func (client *TwentySixClient) ForgetMessage(hash string) (ForgetMessageResponse, error) {
+func (client *TwentySixClient) ForgetMessage(hash string) (MessageResponse, error) {
 	now := float64(time.Now().UnixMilli()) / 1000
 
 	itemContent := ForgetMessageContent{
@@ -371,7 +610,7 @@ func (client *TwentySixClient) ForgetMessage(hash string) (ForgetMessageResponse
 
 	msgContent, err := json.Marshal(itemContent)
 	if err != nil {
-		return ForgetMessageResponse{}, err
+		return MessageResponse{}, err
 	}
 
 	contentHash := sha256.Sum256(msgContent)
@@ -397,13 +636,13 @@ func (client *TwentySixClient) ForgetMessage(hash string) (ForgetMessageResponse
 
 	buff, err := json.Marshal(req)
 	if err != nil {
-		return ForgetMessageResponse{}, err
+		return MessageResponse{}, err
 	}
 
 	storeEndpoint := AlephApiUrl + "/api/v0/messages"
 	request, err := http.NewRequest("POST", storeEndpoint, bytes.NewBuffer(buff))
 	if err != nil {
-		return ForgetMessageResponse{}, err
+		return MessageResponse{}, err
 	}
 
 	request.Header.Add("Content-Type", "application/json")
@@ -411,20 +650,20 @@ func (client *TwentySixClient) ForgetMessage(hash string) (ForgetMessageResponse
 
 	response, err := client.http.Do(request)
 	if err != nil {
-		return ForgetMessageResponse{}, err
+		return MessageResponse{}, err
 	}
 
 	resultBody, err := io.ReadAll(response.Body)
 	if err != nil {
-		return ForgetMessageResponse{}, err
+		return MessageResponse{}, err
 	}
 
 	// response, err := client.SendMessage(ForgetMessageType, itemContent)
 	// if err != nil {
-	// 	return ForgetMessageResponse{}, err
+	// 	return MessageResponse{}, err
 	// }
 
-	var parsedRes ForgetMessageResponse
+	var parsedRes MessageResponse
 	json.Unmarshal(resultBody, &parsedRes)
 
 	return parsedRes, nil
